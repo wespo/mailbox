@@ -1,0 +1,93 @@
+//SPI SLAVE TRANSMIT
+
+//if you're a slave, you need to transmit when the master sends a request.
+		//SPDR = outbox; //load the output SPI register
+		digitalWrite(MS, LOW);
+		transmitFlag = true;
+		//Serial.println("set up for transmit!");
+		byte transmitChecksum = 0;
+		cli();
+		//first transmit a start flag
+		SPDR = '$';
+		while (!(SPSR & _BV(SPIF)))
+		    ;
+		//next, transmit the size
+		SPDR = shieldMailbox.outboxSize>>8;
+		while (!(SPSR & _BV(SPIF)))
+		    ;
+		SPDR = shieldMailbox.outboxSize;
+		while (!(SPSR & _BV(SPIF)))
+		    ;
+		//iterate over the struct, transmitting
+		for(unsigned int i = 0; i < shieldMailbox.outboxSize; i++)
+		{
+			transmitChecksum += shieldMailbox.outbox[i];
+			SPDR = shieldMailbox.outbox[i];
+			while (!(SPSR & _BV(SPIF)))
+		    ;
+		}
+
+		//transmit a checksum
+		SPDR = transmitChecksum;
+		while (!(SPSR & _BV(SPIF)))
+		    ;
+		//done transmitting
+		digitalWrite(MS, HIGH);
+		shieldMailbox.transmitFlag = false;
+		sei();
+
+//SPI MASTER SLAVE INTERRUPT
+	Serial.println("start transfer.");
+	digitalWrite(SS, LOW);
+	SPI.transfer(0);
+	if(!shieldMailbox.transmitFlag) //this is the normal slave recieve mode.
+	{
+		if((shieldMailbox.messageIndex == 0) && (SPDR == '$')) //look for message start flag;
+		{
+			shieldMailbox.messageIndex++;
+
+			while (!(SPSR & _BV(SPIF)))
+		    ;
+
+			shieldMailbox.inboxSize = (byte) SPDR;
+			shieldMailbox.inboxSize << 8;
+
+			while (!(SPSR & _BV(SPIF)))
+		    ;
+
+			shieldMailbox.inboxSize += (byte) SPDR;
+			//shieldMailbox.inbox = realloc(*shieldMailbox.inbox, shieldMailbox.inboxSize);
+
+			for(unsigned int i = 0; i < shieldMailbox.inboxSize; i++)
+			{
+				while (!(SPSR & _BV(SPIF)))
+		    	;
+				shieldMailbox.inbox[i] = (byte) SPDR;
+				shieldMailbox.checksum += (byte) SPDR;
+			}
+
+			while (!(SPSR & _BV(SPIF)))
+		    ;
+			
+			if(1)//shieldMailbox.checksum == (byte) SPDR) //user function goes here
+			{
+				Serial.print('$',HEX);
+				Serial.print(',');
+				Serial.print((byte)shieldMailbox.inboxSize>>8, HEX);
+				Serial.print(',');
+				Serial.print((byte)shieldMailbox.inboxSize, HEX);
+				Serial.print(',');
+				for(unsigned int i = 0; i < shieldMailbox.inboxSize; i++)
+				{
+					Serial.print(shieldMailbox.inbox[i], HEX);
+					Serial.print(',');
+				}
+				Serial.println(shieldMailbox.checksum, HEX);
+			}
+			shieldMailbox.messageIndex = 0;
+			shieldMailbox.checksum = 0;
+		}		
+	}
+	digitalWrite(SS, HIGH);
+	while(!digitalRead(MS)) //wait for Slave to pull master select high.
+	{};
