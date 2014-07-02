@@ -231,45 +231,50 @@ ISR (SPI_STC_vect) //handles recieve in slave mode.
 	byte counter = 0;
 	shieldMailbox.success = false;
 
-	if((shieldMailbox.messageIndex == 0) && (SPDR == '$')) //look for message start flag;
+	if(SPDR == '$') //look for message start flag;
 	{
+		//we got the message start sentinel. Next we wait for the checksum.
+		shieldMailbox.checksum = 0;
+		byte recvdChecksum = (byte) SPI.transfer(counter++);
+
+		//the next 16 bits are the message length.
 		shieldMailbox.inboxSize = (byte) SPI.transfer(counter++);
 		shieldMailbox.inboxSize <<= 8;
-		if(digitalRead(SS))
-		{
-			return;
-		}
 
 		shieldMailbox.inboxSize += (byte) SPI.transfer(counter++);
-		if(digitalRead(SS))
-		{
-			return;
-		}
+
+		//now we allocate memory for the message itself.
 		shieldMailbox.inbox = (byte*) realloc(shieldMailbox.inbox, shieldMailbox.inboxSize);
 
+		//Iterate until we get enough bytes for the message.
+		for(unsigned int i = 0; i < shieldMailbox.inboxSize; i+=2)
+		{
+			shieldMailbox.inbox[i+1] = (byte) SPI.transfer(counter++);
+			shieldMailbox.inbox[i] = (byte) SPI.transfer(counter++);
+			
+			int checksumTemp = shieldMailbox.inbox[i+1];
+			checksumTemp <<=8;
+			checksumTemp += shieldMailbox.inbox[i];
+			shieldMailbox.checksum += checksumTemp;
+		}
 		for(unsigned int i = 0; i < shieldMailbox.inboxSize; i++)
 		{
-			shieldMailbox.inbox[i] = (byte) SPI.transfer(counter++);
-			if(digitalRead(SS))
-			{
-				return;
-			}
-			shieldMailbox.checksum += shieldMailbox.inbox[i];
+			
 		}
-
-		byte newChecksum = (byte) SPI.transfer(counter++);
-		if(digitalRead(SS))
+		//if(1) //temporarily commented out check, for testing.
+		if(shieldMailbox.checksum == recvdChecksum) //check to see if we got the message correctly.
 		{
-			return;
-		}
+			shieldMailbox.success = true; //we did, flag successful new message.
+			// for(int i = 0; i < 42; i++)
+			// {
+			// 	Serial.print(shieldMailbox.inbox[i], HEX);
+			// 	Serial.print(',');
+			// }
+			Serial.print('\n');
+			shieldMailbox.receiveCallback(); //call the user defined message recieve function.
 
-		if(shieldMailbox.checksum == newChecksum) //user function goes here
-		{
-			shieldMailbox.success = true;
-			shieldMailbox.receiveCallback();
 		}
 		shieldMailbox.messageIndex = 0;
-		shieldMailbox.checksum = 0;
 		shieldMailbox.newMessage = true;
 	}
 }  // end of interrupt routine SPI_STC_vect
@@ -317,7 +322,7 @@ ISR(INT0_vect) {
 		shieldMailbox.checksum = 0;
 		for(unsigned int i = 0; i < shieldMailbox.inboxSize; i++)
 		{
-			shieldMailbox.checksum += shieldMailbox.inbox[i];
+			shieldMailbox.checksum += shieldMailbox.inbox[i];	
 		}
 		if(shieldMailbox.checksum == newChecksum)
 		{
