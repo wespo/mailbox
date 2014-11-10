@@ -94,15 +94,16 @@ int mailbox::transmit(byte *vector, unsigned int vectorSize) {
 	// *outbox = *vector;
 	// outboxSize = vectorSize;
 	byte transmitChecksum = 0;
+	bool transmitSuccess = false;
 	if(spiMode == SPI_MASTER)
 	{
 		Serial.println("here");
-		bool transmitSuccess = false;
 		//get ready to transmit, pull slave select low.
 		digitalWrite(SS, LOW);
 		
 		while(!transmitSuccess)
 		{
+			transmitChecksum = 0;
 			byte packetCount = 1;
 			byte packetIn = 0;
 			//first transmit a start flag
@@ -162,11 +163,12 @@ int mailbox::transmit(byte *vector, unsigned int vectorSize) {
 	}
 	else //SPI_SLAVE
 	{
-		bool transmitSuccess = false;
 		//Serial.println("transmit function in slave mode.");
 		SPIClass::detachInterrupt();
+		int tryCount = 0;
 		while(!transmitSuccess)
 		{
+			transmitChecksum = 0;
 			byte packetCount = 1;
 			byte packetIn = 0;
 			//while(transmitFlag){}; //wait for any outgoing transmissions to complete.
@@ -178,43 +180,62 @@ int mailbox::transmit(byte *vector, unsigned int vectorSize) {
 			digitalWrite(MS, LOW);
 			SPDR = '$';
 			SPIClass::transfer('$');
+			packetIn = SPIClass::transfer(transmitChecksum);
 			packetIn = SPIClass::transfer(vectorSize>>8);
-			if(packetCount != packetIn)
-			{
-				break;
-			}
+			// if(packetCount != packetIn)
+			// {
+			// 	break;
+			// }
 			packetCount++;
 			packetIn = SPIClass::transfer(vectorSize);
-			if(packetCount != packetIn)
-			{
-				break;
-			}
+			// if(packetCount != packetIn)
+			// {
+			// 	break;
+			// }
 			packetCount++;
 			//iterate over the struct, transmitting
 			for(unsigned int i = 0; i < vectorSize; i++)
 			{
 				packetIn = SPIClass::transfer(vector[i]);
-				if(packetCount != packetIn)
-				{
-					break;
-				}
+				// if(packetCount != packetIn)
+				// {
+				// 	break;
+				// }
 				packetCount++;
 			}
 
 			//transmit a checksum
-			packetIn = SPIClass::transfer(transmitChecksum);
-			if(packetCount != packetIn)
+			// if(packetCount != packetIn)
+			// {
+			// 	break;
+			// }
+			//transmitSuccess = true;
+			packetIn = SPIClass::transfer(0x00);
+			//Serial.println(packetIn, HEX);
+			
+			if(packetIn == MB_ACK)
+			{
+			 	transmitSuccess = true;
+			}
+			else
+			{
+				digitalWrite(MS, HIGH);
+				delay(50); //delay to avoid oveloading the DSP
+			}
+			tryCount++;
+			if(tryCount > RETRIES) //give up after too many failed attempts at transmission
 			{
 				break;
 			}
-			transmitSuccess = true;
+			break; //temporary skip since retry isn't working;
 		}
 			//done tranmitting, pull up slave select pin.
 			digitalWrite(MS, HIGH);
 			SPIClass::attachInterrupt();
+			delay(50); //delay to avoid oveloading the DSP
 	}
 
-	return 1;
+	return transmitSuccess;
 }
 int mailbox::receive() {
 	newMessage = false; //this just blocks until the interrup recieves a new message.
@@ -230,9 +251,11 @@ ISR (SPI_STC_vect) //handles recieve in slave mode.
 {
 	byte counter = 0;
 	shieldMailbox.success = false;
-
-	if(SPDR == '$') //look for message start flag;
+	byte data = SPDR;
+	//Serial.println(data, HEX);
+	if(data == '$') //look for message start flag;
 	{
+
 		//we got the message start sentinel. Next we wait for the checksum.
 		shieldMailbox.checksum = 0;
 		byte recvdChecksum = (byte) SPI.transfer(counter++);
@@ -245,7 +268,6 @@ ISR (SPI_STC_vect) //handles recieve in slave mode.
 
 		//now we allocate memory for the message itself.
 		shieldMailbox.inbox = (byte*) realloc(shieldMailbox.inbox, shieldMailbox.inboxSize);
-
 		//Iterate until we get enough bytes for the message.
 		for(unsigned int i = 0; i < shieldMailbox.inboxSize; i+=2)
 		{
@@ -257,22 +279,19 @@ ISR (SPI_STC_vect) //handles recieve in slave mode.
 			checksumTemp += shieldMailbox.inbox[i];
 			shieldMailbox.checksum += checksumTemp;
 		}
-		for(unsigned int i = 0; i < shieldMailbox.inboxSize; i++)
-		{
-			
-		}
+		//Serial.println(shieldMailbox.inboxSize);
+		//return;
 		//if(1) //temporarily commented out check, for testing.
 		if(shieldMailbox.checksum == recvdChecksum) //check to see if we got the message correctly.
 		{
 			shieldMailbox.success = true; //we did, flag successful new message.
-			// for(int i = 0; i < 42; i++)
+			// for(int i = 0; i < 12; i++)
 			// {
 			// 	Serial.print(shieldMailbox.inbox[i], HEX);
 			// 	Serial.print(',');
 			// }
-			Serial.print('\n');
+			// Serial.print('\n');
 			shieldMailbox.receiveCallback(); //call the user defined message recieve function.
-
 		}
 		shieldMailbox.messageIndex = 0;
 		shieldMailbox.newMessage = true;
