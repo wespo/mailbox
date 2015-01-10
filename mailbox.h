@@ -31,7 +31,9 @@ extern "C" void INT0_vect(void)  __attribute__ ((signal));
 #define SCK 13			//SPI CLOCK
 #define SPI_MASTER true //MASTER MODE
 #define SPI_SLAVE false //SLAVE MODE
-
+#define MB_ACK 0xBE
+#define MB_BAD 0x44
+#define RETRIES 8
 class mailbox : public SPIClass {
 public:
 	int begin(bool mode, void (*callbackFunction)()); //start as master or slave
