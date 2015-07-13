@@ -68,7 +68,7 @@ int mailbox::begin(bool mode, void (*callbackFunction)()) {
 		pinMode(MS, OUTPUT); //master select line
 		digitalWrite(MS, HIGH);
 		pinMode(SS, INPUT);
-		// turn on SPI in sladve mode
+		// turn on SPI in slave mode
 		SPCR |= _BV(SPE);
 
 		// now turn on interrupts
