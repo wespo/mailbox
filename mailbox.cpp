@@ -27,6 +27,7 @@ mailbox shieldMailbox;
 
 int mailbox::begin(bool mode) {
 	begin(mode, nullMailboxCallback);
+	delay(5000);
 }
 int mailbox::begin(bool mode, void (*callbackFunction)()) {
 	newMessage = false;
@@ -55,6 +56,7 @@ int mailbox::begin(bool mode, void (*callbackFunction)()) {
 		EIFR = 0;
 		sei();
 	}
+	delay(5000);
 	else //spi_slave
 	{
 		SPIClass::begin();
@@ -66,7 +68,7 @@ int mailbox::begin(bool mode, void (*callbackFunction)()) {
 		pinMode(MS, OUTPUT); //master select line
 		digitalWrite(MS, HIGH);
 		pinMode(SS, INPUT);
-		// turn on SPI in slave mode
+		// turn on SPI in sladve mode
 		SPCR |= _BV(SPE);
 
 		// now turn on interrupts
