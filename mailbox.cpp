@@ -55,8 +55,8 @@ int mailbox::begin(bool mode, void (*callbackFunction)()) {
 		//EICRA &= ( 0 << ISC00);
 		EIFR = 0;
 		sei();
+		delay(5000);
 	}
-	delay(5000);
 	else //spi_slave
 	{
 		SPIClass::begin();
@@ -73,6 +73,7 @@ int mailbox::begin(bool mode, void (*callbackFunction)()) {
 
 		// now turn on interrupts
 		SPIClass::attachInterrupt();
+		delay(5000);
 	}
 	return 1;
 }
