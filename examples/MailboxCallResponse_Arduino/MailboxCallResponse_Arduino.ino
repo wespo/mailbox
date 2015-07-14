@@ -29,7 +29,7 @@ void loop() {
   Serial.print(val);
   Serial.print("\t");
   message[0] = val;
-  shieldMailbox.transmit((byte*)message, getLength(message[0])); //send two bytes
+  shieldMailbox.transmit((byte*)message, 2); //send two bytes
 }
 
 void printFirst(){
