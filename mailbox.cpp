@@ -27,6 +27,7 @@ mailbox shieldMailbox;
 
 int mailbox::begin(bool mode) {
 	begin(mode, nullMailboxCallback);
+	delay(5000);
 }
 int mailbox::begin(bool mode, void (*callbackFunction)()) {
 	newMessage = false;
@@ -54,6 +55,7 @@ int mailbox::begin(bool mode, void (*callbackFunction)()) {
 		//EICRA &= ( 0 << ISC00);
 		EIFR = 0;
 		sei();
+		delay(5000);
 	}
 	else //spi_slave
 	{
@@ -71,6 +73,7 @@ int mailbox::begin(bool mode, void (*callbackFunction)()) {
 
 		// now turn on interrupts
 		SPIClass::attachInterrupt();
+		delay(5000);
 	}
 	return 1;
 }
