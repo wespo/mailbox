@@ -15,10 +15,10 @@ int val = 0;
 int message[1] = {val};
 
 void setup() {
-shieldMailbox.begin(SPI_SLAVE);
-shieldMailbox.attachHandler(printFirst);
 Serial.begin(9600);
 Serial.println("Please wait 5 seconds");
+shieldMailbox.begin(SPI_SLAVE);
+shieldMailbox.attachHandler(printFirst);
 Serial.println("Type a number up to 16383 and get the value doubled back.");
 }
 
