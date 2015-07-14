@@ -72,6 +72,7 @@ int mailbox::begin(bool mode, void (*callbackFunction)()) {
 		// now turn on interrupts
 		SPIClass::attachInterrupt();
 	}
+	delay(5000);
 	return 1;
 }
 int mailbox::end() {
