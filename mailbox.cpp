@@ -41,6 +41,7 @@ int mailbox::begin(bool mode, void (*callbackFunction)()) {
 		// also put SCK, MOSI into LOW state, and SS into HIGH state.
 		// Then put SPI hardware into Master mode and turn SPI on
 		SPIClass::begin();
+		SPIClass::setDataMode(SPI_MODE0);
 		
 		// Slow down the master a bit
 		SPIClass::setClockDivider(SPI_CLOCK_DIV8);
@@ -61,6 +62,9 @@ int mailbox::begin(bool mode, void (*callbackFunction)()) {
 		
 		// Slow down the master a bit
 		SPIClass::setClockDivider(SPI_CLOCK_DIV8);
+		SPIClass::setDataMode(SPI_MODE0);
+		// SPIClass::setDataMode(SPI_MODE3);
+		//SPIClass::setBitOrder(MSBFIRST);
 		// have to send on master in, *slave out*
 		pinMode(MISO, OUTPUT);
 		pinMode(MS, OUTPUT); //master select line
@@ -179,16 +183,18 @@ int mailbox::transmit(byte *vector, unsigned int vectorSize) {
 				transmitChecksum += vector[i];
 			}
 			digitalWrite(MS, LOW);
-			SPDR = '$';
 			SPIClass::transfer('$');
 			packetIn = SPIClass::transfer(transmitChecksum);
-			packetIn = SPIClass::transfer(vectorSize>>8);
+			//Serial.println(transmitChecksum);
 			// if(packetCount != packetIn)
 			// {
 			// 	break;
 			// }
 			packetCount++;
+			packetIn = SPIClass::transfer(vectorSize>>8);
+			//Serial.println(vectorSize>>8);
 			packetIn = SPIClass::transfer(vectorSize);
+			//Serial.println(vectorSize);
 			// if(packetCount != packetIn)
 			// {
 			// 	break;
@@ -198,6 +204,7 @@ int mailbox::transmit(byte *vector, unsigned int vectorSize) {
 			for(unsigned int i = 0; i < vectorSize; i++)
 			{
 				packetIn = SPIClass::transfer(vector[i]);
+				//Serial.println(vector[i]);
 				// if(packetCount != packetIn)
 				// {
 				// 	break;
@@ -212,6 +219,8 @@ int mailbox::transmit(byte *vector, unsigned int vectorSize) {
 			// }
 			//transmitSuccess = true;
 			packetIn = SPIClass::transfer(0x00);
+			// while(!(SPSR & (1<<SPIF)));
+			// packetIn = SPDR;
 			//Serial.println(packetIn, HEX);
 			
 			if(packetIn == MB_ACK)
@@ -221,21 +230,25 @@ int mailbox::transmit(byte *vector, unsigned int vectorSize) {
 			else
 			{
 				digitalWrite(MS, HIGH);
-				delay(50); //delay to avoid oveloading the DSP
+				delayMicroseconds(50); //delay to avoid oveloading the DSP
 			}
 			tryCount++;
 			if(tryCount > RETRIES) //give up after too many failed attempts at transmission
 			{
-				break;
+				digitalWrite(MS, HIGH);
+				SPIClass::attachInterrupt();
+				delayMicroseconds(50); //delay to avoid oveloading the DSP
+				return transmitSuccess;
 			}
 			break; //temporary skip since retry isn't working;
 		}
 			//done tranmitting, pull up slave select pin.
 			digitalWrite(MS, HIGH);
 			SPIClass::attachInterrupt();
-			delay(50); //delay to avoid oveloading the DSP
+			delayMicroseconds(50); //delay to avoid oveloading the DSP
 	}
-
+	digitalWrite(MS, HIGH);
+	SPIClass::attachInterrupt();
 	return transmitSuccess;
 }
 int mailbox::receive() {
@@ -244,12 +257,18 @@ int mailbox::receive() {
 	{}
 	return 1;
 }
-
+bool firstRun = true;
 ISR (SPI_STC_vect) //handles recieve in slave mode.
 //ISR routine grabs data from SPI buffer, deserializes it in the inbox, 
 //and then when the inbox is full or the serialize flag is recieved, calls
 //the assigned user function to parse the data.
 {
+	if(firstRun)
+	{
+		firstRun = false;
+		return;
+	}
+	while(!(SPSR & (1<<SPIF)));
 	byte counter = 0;
 	shieldMailbox.success = false;
 	byte data = SPDR;
